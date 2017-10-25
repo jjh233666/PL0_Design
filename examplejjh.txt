@@ -1,0 +1,11 @@
+var i,j; //fuck you
+/*sdadsa
+asdasda*/
+begin
+  i:=-1;
+  j:=i+1;
+  if i&&j then j:=j+1;
+  if (!i&&j||i&&(i))   then j:=j+1;
+  if (i^j) then j:=j+1;
+  if (i%j) then j:=j+1;
+end.
