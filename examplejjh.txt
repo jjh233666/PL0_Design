@@ -1,11 +1,16 @@
-var i,j; //fuck you
+var i,j,a[10][10]; //fuck you
 /*sdadsa
 asdasda*/
 begin
-  i:=-1;
-  j:=i+1;
-  if i&&j then j:=j+1;
-  if (!i&&j||i&&(i))   then j:=j+1;
-  if (i^j) then j:=j+1;
-  if (i%j) then j:=j+1;
+  i=-1;
+  j=i+2;
+  i=i+1;
+  if -i&&j then j=j+1;
+  if (!i&&j||i&&(i))   then a[5][5]=100+1500;
+  a[i][j]=1600;
+  a[4][4]=i+j*a[i][j];
+
+  if (-i^j) then //j+=j+1;
+  if (i%j) then //j*=j+1;
+  
 end.
