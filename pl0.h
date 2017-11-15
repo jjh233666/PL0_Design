@@ -1,6 +1,6 @@
 #include <stdio.h>
 
-#define NRW        11     // number of reserved words
+#define NRW        16     // number of reserved words
 #define TXMAX      500    // length of identifier table
 #define MAXNUMLEN  14     // maximum number of digits in numbers
 #define NSYM       15     // maximum number of symbols in array ssym and csym
@@ -11,7 +11,10 @@
 #define CXMAX      500    // size of code array
 
 #define MAXSYM     30     // maximum number of symbols  
-
+#define MAXDIM     10     // maximum dimension of the array
+#define MAXPROC    30     // maximum number of proc
+#define MAXARGC    10     // maximun number of procedure argument
+#define MAXARRAY   30
 #define STACKSIZE  1000   // maximum storage
 
 enum symtype
@@ -33,7 +36,7 @@ enum symtype
 	SYM_LPAREN,
 	SYM_RPAREN,
 	SYM_COMMA,
-	SYM_SEMICOLON,
+	SYM_SEMICOLON,//;
 	SYM_PERIOD,
 	SYM_BECOMES,
     SYM_BEGIN,
@@ -53,17 +56,36 @@ enum symtype
 	SYM_BAND,//10.25
 	SYM_BOR,
 	SYM_BNOR,
-	SYM_MOD
+	SYM_MOD,
+	SYM_DPLUS,
+	SYM_DMINUS,
+	SYM_LBRACKET, //[
+	SYM_RBRACKET, //]
+    SYM_CONLON,   //:
+	SYM_QUESMARK, //?
+    SYM_RETURN,   //return
+	SYM_ELSE,     //else
+	SYM_ELIF,     //elif
+	SYM_EXIT,
+	SYM_FOR ,     //for
+	SYM_OREQ,
+	SYM_ANDEQ,
+	SYM_NOREQ,
+	SYM_ADDEQ,
+	SYM_MINUSEQ,
+	SYM_MULTEQ,
+	SYM_DIVEQ,
+	SYM_MODEQ
 };
 
 enum idtype
 {
-	ID_CONSTANT, ID_VARIABLE, ID_PROCEDURE
+	ID_CONSTANT, ID_VARIABLE, ID_PROCEDURE,ID_ARRAY
 };
 
 enum opcode
 {
-	LIT, OPR, LOD, STO, CAL, INT, JMP, JPC
+	LIT, OPR, LOD, STO, CAL, INT, JMP, JPC,ARR_STO,ARR_LOD
 };
 
 enum oprcode
@@ -72,7 +94,7 @@ enum oprcode
 	OPR_MUL, OPR_DIV, OPR_ODD, OPR_EQU,
 	OPR_NEQ, OPR_LES, OPR_LEQ, OPR_GTR,
 	OPR_GEQ, OPR_NOT, OPR_AND, OPR_OR,
-	OPR_BAND,OPR_BOR, OPR_BNOR,OPR_MOD //10.25
+	OPR_BAND,OPR_BOR, OPR_BNOR,OPR_MOD, //10.25
 };
 
 
@@ -87,7 +109,7 @@ typedef struct
 char* err_msg[] =
 {
 /*  0 */    "",
-/*  1 */    "Found ':=' when expecting '='.",
+/*  1 */    "Found '==' when expecting '='.",
 /*  2 */    "There must be a number to follow '='.",
 /*  3 */    "There must be an '=' to follow the identifier.",
 /*  4 */    "There must be an identifier to follow 'const', 'var', or 'procedure'.",
@@ -112,10 +134,10 @@ char* err_msg[] =
 /* 23 */    "The symbol can not be followed by a factor.",
 /* 24 */    "The symbol can not be as the beginning of an expression.",
 /* 25 */    "The number is too great.",
-/* 26 */    "",
-/* 27 */    "",
-/* 28 */    "",
-/* 29 */    "",
+/* 26 */    "There should be a number after it",
+/* 27 */    "']' expected",
+/* 28 */    "'[' expected",
+/* 29 */    "It is not a final array",
 /* 30 */    "",
 /* 31 */    "",
 /* 32 */    "There are too many levels."
@@ -133,7 +155,7 @@ int  err;
 int  cx;         // index of current instruction to be generated.
 int  level = 0;
 int  tx = 0;
-
+int  ax=0;
 char line[80];
 
 instruction code[CXMAX];
@@ -142,7 +164,8 @@ char* word[NRW + 1] =
 {
 	"", /* place holder */
 	"begin", "call", "const", "do", "end","if",
-	"odd", "procedure", "then", "var", "while"
+	"odd", "procedure", "then", "var", "while",
+	"else","elif","return","exit","for"
 };
 
 int wsym[NRW + 1] =
@@ -153,20 +176,21 @@ int wsym[NRW + 1] =
 
 int ssym[NSYM + 1] =
 {
-	SYM_NULL, SYM_PLUS, SYM_MINUS, SYM_TIMES, SYM_SLASH,
+	SYM_NULL, SYM_LBRACKET, SYM_RBRACKET, SYM_TIMES, SYM_SLASH,
 	SYM_LPAREN, SYM_RPAREN, SYM_EQU, SYM_COMMA, SYM_PERIOD, SYM_SEMICOLON,SYM_NOT,
 	SYM_BAND ,SYM_BOR,SYM_BNOR,SYM_MOD
 };
 
 char csym[NSYM + 1] =
 {
-	' ', '+', '-', '*', '/', '(', ')', '=', ',', '.', ';', '!','&','|','^','%'
+	' ', '[', ']', '*', '/', '(', ')', '=', ',', '.', ';', '!','&','|','^','%'
+	
 };
 
-#define MAXINS   8
+#define MAXINS   10
 char* mnemonic[MAXINS] =
 {
-	"LIT", "OPR", "LOD", "STO", "CAL", "INT", "JMP", "JPC"
+	"LIT", "OPR", "LOD", "STO", "CAL", "INT", "JMP", "JPC","ARR_STO","ARR_LOD"
 };
 
 typedef struct
@@ -184,7 +208,15 @@ typedef struct
 	int   kind;
 	short level;
 	short address;
+	int   index ;  //  compute  the process or array's index
 } mask;
+typedef struct
+{
+	int dimension;
+	int count[MAXDIM];
+	int range[MAXDIM];
+}array_info;
+array_info arrtable[MAXARRAY];
 
 FILE* infile;
 
