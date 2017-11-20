@@ -3,7 +3,7 @@
 #define NRW        16     // number of reserved words
 #define TXMAX      500    // length of identifier table
 #define MAXNUMLEN  14     // maximum number of digits in numbers
-#define NSYM       15     // maximum number of symbols in array ssym and csym
+#define NSYM       17     // maximum number of symbols in array ssym and csym
 #define MAXIDLEN   10     // length of identifiers
 
 #define MAXADDRESS 32767  // maximum address
@@ -75,7 +75,10 @@ enum symtype
 	SYM_MINUSEQ,
 	SYM_MULTEQ,
 	SYM_DIVEQ,
-	SYM_MODEQ
+	SYM_MODEQ,
+	SYM_LBrace,   //{
+	SYM_RBrace    //}
+	
 };
 
 enum idtype
@@ -85,7 +88,7 @@ enum idtype
 
 enum opcode
 {
-	LIT, OPR, LOD, STO, CAL, INT, JMP, JPC,ARR_STO,ARR_LOD
+	LIT, OPR, LOD, STO, CAL, INT, JMP, JPC,ARR_STO,ARR_LOD,RETURN
 };
 
 enum oprcode
@@ -95,6 +98,7 @@ enum oprcode
 	OPR_NEQ, OPR_LES, OPR_LEQ, OPR_GTR,
 	OPR_GEQ, OPR_NOT, OPR_AND, OPR_OR,
 	OPR_BAND,OPR_BOR, OPR_BNOR,OPR_MOD, //10.25
+	
 };
 
 
@@ -138,9 +142,12 @@ char* err_msg[] =
 /* 27 */    "']' expected",
 /* 28 */    "'[' expected",
 /* 29 */    "It is not a final array",
-/* 30 */    "",
-/* 31 */    "",
-/* 32 */    "There are too many levels."
+/* 30 */    "Missing '{' ",
+/* 31 */    "Missing '}' ",
+/* 32 */    "There are too many levels.",
+/* 33 */    "It can not be a argument",
+/* 34 */    " '(' expected",
+/* 35 */    "the real arg and the formal arg is not matched"
 };
 
 //////////////////////////////////////////////////////////////////////
@@ -156,8 +163,9 @@ int  cx;         // index of current instruction to be generated.
 int  level = 0;
 int  tx = 0;
 int  ax=0;
+int  p_index=0;
 char line[80];
-
+int curr_proc=0;
 instruction code[CXMAX];
 
 char* word[NRW + 1] =
@@ -171,45 +179,45 @@ char* word[NRW + 1] =
 int wsym[NRW + 1] =
 {
 	SYM_NULL, SYM_BEGIN, SYM_CALL, SYM_CONST, SYM_DO, SYM_END,
-	SYM_IF, SYM_ODD, SYM_PROCEDURE, SYM_THEN, SYM_VAR, SYM_WHILE
+	SYM_IF, SYM_ODD, SYM_PROCEDURE, SYM_THEN, SYM_VAR, SYM_WHILE,
+	SYM_ELSE,SYM_ELIF,SYM_RETURN,SYM_EXIT,SYM_FOR
 };
 
 int ssym[NSYM + 1] =
 {
 	SYM_NULL, SYM_LBRACKET, SYM_RBRACKET, SYM_TIMES, SYM_SLASH,
 	SYM_LPAREN, SYM_RPAREN, SYM_EQU, SYM_COMMA, SYM_PERIOD, SYM_SEMICOLON,SYM_NOT,
-	SYM_BAND ,SYM_BOR,SYM_BNOR,SYM_MOD
+	SYM_BAND ,SYM_BOR,SYM_BNOR,SYM_MOD,SYM_LBrace,SYM_RBrace
 };
 
 char csym[NSYM + 1] =
 {
-	' ', '[', ']', '*', '/', '(', ')', '=', ',', '.', ';', '!','&','|','^','%'
+	' ', '[', ']', '*', '/', '(', ')', '=', ',', '.', ';', '!','&','|','^','%','{','}'
 	
 };
 
-#define MAXINS   10
+#define MAXINS   11
 char* mnemonic[MAXINS] =
 {
-	"LIT", "OPR", "LOD", "STO", "CAL", "INT", "JMP", "JPC","ARR_STO","ARR_LOD"
+	"LIT", "OPR", "LOD", "STO", "CAL", "INT", "JMP", "JPC","ARR_STO","ARR_LOD","RETURN"
 };
 
 typedef struct
 {
-	char name[MAXIDLEN + 1];
-	int  kind;
-	int  value;
-} comtab;
-
+	char name[MAXIDLEN+1];
+	int kind;
+	int value;
+	int index;
+}	comtab;
 comtab table[TXMAX];
-
 typedef struct
 {
-	char  name[MAXIDLEN + 1];
-	int   kind;
+	char name[MAXIDLEN+1];
+	int kind;
 	short level;
 	short address;
-	int   index ;  //  compute  the process or array's index
-} mask;
+	int index;
+}mask;
 typedef struct
 {
 	int dimension;
@@ -218,6 +226,11 @@ typedef struct
 }array_info;
 array_info arrtable[MAXARRAY];
 
+typedef struct{
+	int argc_num;
+	int type[MAXARGC];
+}Pro_info;
+Pro_info Protable[MAXPROC];
 FILE* infile;
 
 // EOF PL0.h

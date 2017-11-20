@@ -1,0 +1,13 @@
+var i,j;
+procedure p(var m){
+var k;
+begin
+k=1;
+return k*2; 
+end	
+}
+begin
+i=1;
+j=p(i);
+i=i+j;
+end.
