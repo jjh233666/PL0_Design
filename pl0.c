@@ -146,13 +146,13 @@ void getsym(void)
 		{
 			sym =SYM_OR;
 		    getch();
-		 }
-		 else if(ch=='=')
-		 {
+		}
+		else if(ch=='=')
+		{
 			 sym=SYM_OREQ;
 			 getch();
-		 }
-		 else sym=SYM_BOR;
+		}
+		else sym=SYM_BOR;
 	}
 	else if(ch=='&')
 	{
@@ -454,8 +454,8 @@ void arglist_declar(symset fsys)
         count++;
 		while(sym==SYM_COMMA)
 		{
-			//getsym();
-			//arg_get_type();
+			getsym();
+			arg_get_type();
 			Protable[p_index].type[count]=table[tx].kind;
 			count++;
 		}// end while 
@@ -513,6 +513,7 @@ void pro_call(symset fsys,int i)
 	 count=real_arg_list(set);
 	 destroyset(set);
 	 gen(CAL,level-mk->level,mk->address);
+	 gen(INT,0,-count);
 	 if(count!=Protable[mk->index].argc_num)
 	 {
 		 error(35);
@@ -912,6 +913,7 @@ void statement(symset fsys)
 		{
 			error(11); // Undeclared identifier.
 		}
+		
 		/*else if (table[i].kind != ID_VARIABLE)
 		{
 			error(12); // Illegal assignment.
@@ -952,23 +954,39 @@ void statement(symset fsys)
 		if(sym!=SYM_SEMICOLON) assign_expr(fsys);
 		else gen(LIT,0,0); // return 0 if there is nothing to return;
 		mask *mk;
+		int return_address;
 		if(curr_proc)
 		{
 			mk=(mask *)&table[curr_proc];
-			gen(RETURN,0,Protable[mk->index].argc_num);// return the value
+			return_address=-Protable[mk->index].argc_num-1;
 		}
-		else gen(RETURN,0,0);  //  like main return 0
+		else return_address=-1;  //  like main return 0
+		gen(STO,0,return_address);
+		gen(RETURN,0,0);
 		if(sym==SYM_SEMICOLON) getsym();
 		else error(10);
+	}
+	else if (sym == SYM_EXIT)
+	{
+		gen(JMP,0,-cx);
+		getsym();
+		/*
+		if(sym == SYM_SEMICOLON){
+			getsym();
+		}
+		else
+		{
+			error(10); //';'expected
+		}*/
 	}
 	else if (sym == SYM_IF)
 	{ // if statement
 		getsym();
-		set1 = createset(SYM_THEN, SYM_DO, SYM_RPAREN,SYM_NULL);
+		set1 = createset(SYM_THEN, SYM_DO,SYM_RPAREN,SYM_ELSE,SYM_NULL);
 		set = uniteset(set1, fsys);
 		assign_expr(set);
-		destroyset(set1);
-		destroyset(set);
+		//destroyset(set1);
+		//destroyset(set);
 		if (sym == SYM_THEN)
 		{
 			getsym();
@@ -978,10 +996,24 @@ void statement(symset fsys)
 			error(16); // 'then' expected.
 		}
 		
-		cx1 = cx;
-		gen(JPC, 0, 0);
-		statement(fsys);
-		code[cx1].a = cx;	
+		cx1 = cx;	//保存当前指令位置
+		gen(JPC, 0, 0);	//生成条件跳转指令，跳转地址暂写0
+		//set1 = createset(SYM_ELSE,SYM_NULL);
+		//set = uniteset(set1,fsys);
+		statement(set);	//处理then后语句
+		if(sym == SYM_ELSE){
+			getsym();
+			cx2 = cx;
+			code[cx1].a = cx+1;
+			gen(JPC,0,0); 
+			statement(fsys);
+			code[cx2].a = cx;
+		}
+		else{
+			code[cx1].a = cx;
+		}
+		destroyset(set1);
+		destroyset(set);
 	}
 	else if (sym == SYM_BEGIN)
 	{ // block
@@ -1048,6 +1080,7 @@ void block(symset fsys)
 	int savedAx;
 	int savedp_index;
 	int savedProc;
+	int return_address;
 	symset set1, set;
 
 	dx = 3;
@@ -1084,7 +1117,7 @@ void block(symset fsys)
 			while (sym == SYM_IDENTIFIER);
 		} // if
 
-		if (sym == SYM_VAR)
+		else if (sym == SYM_VAR)
 		
 		{ // variable declarations
 			getsym();
@@ -1108,10 +1141,9 @@ void block(symset fsys)
 			}
 			while (sym == SYM_IDENTIFIER);
 		} // if
-		block_dx = dx; //save dx before handling procedure call!
 		while(sym == SYM_PROCEDURE)
-
-		{ // procedure declarations
+        { // procedure declarations
+			block_dx = dx; //save dx before handling procedure call!
 			getsym();
 			if (sym == SYM_IDENTIFIER)
 			{
@@ -1173,7 +1205,7 @@ void block(symset fsys)
 				dx=block_dx;
 				curr_proc=savedProc;
 		} // while
-		dx = block_dx; //restore dx after handling procedure call!
+		//dx = block_dx; //restore dx after handling procedure call!
 		set1 = createset(SYM_IDENTIFIER, SYM_NULL);
 		set = uniteset(statbegsys, set1);
 		test(set, declbegsys, 7);
@@ -1194,9 +1226,11 @@ void block(symset fsys)
 	gen(LIT, 0, 0); // return 0
 	if(curr_proc)
 	{
-		gen(RETURN,0,Protable[mk->index].argc_num);       
+		return_address=-Protable[mk->index].argc_num-1;       
 	}
-	else gen(RETURN,0,0);
+	else return_address=-1;
+	gen(STO,0,return_address);
+    gen(RETURN,0,0);
 	test(fsys, phi, 8); // test for error: Follow the statement is an incorrect symbol.
 	listcode(cx0, cx);
 } // block
@@ -1257,8 +1291,9 @@ void interpret()
 			case OPR_MUL:
 				top--;
 				stack[top] *= stack[top + 1];
+				printf("%d\n",stack[top]);
 				break;
-			case OPR_DIV:
+			case OPR_DIV:	
 				top--;
 				if (stack[top + 1] == 0)
 				{
@@ -1300,7 +1335,7 @@ void interpret()
 		case STO:
 			stack[base(stack, b, i.l) + i.a] = stack[top];
 			printf("%d\n", stack[top]);
-			top--;
+			//top--;
 			break;
 		case CAL:
 			stack[top + 1] = base(stack, b, i.l);
@@ -1313,10 +1348,10 @@ void interpret()
 		case INT:
 			top += i.a;
 			break;
-		case JMP:
+		case JMP:	//条件跳转
 			pc = i.a;
 			break;
-		case JPC:
+		case JPC:	//无条件跳转
 			if (stack[top] == 0)
 				pc = i.a;
 			top--;
@@ -1333,9 +1368,8 @@ void interpret()
 			printf("%d\n",stack[top]);
 		    break;
 		case RETURN:
-		    stack[b-i.a-1]=stack[top];
 			//printf("%d\n",stack[top]);
-			top=b-i.a-1;
+			top=b-1;
 			pc=stack[b+2];
 			b =stack[b+1];
 			break;
