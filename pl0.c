@@ -903,7 +903,7 @@ void assign_expr(symset fsys)
 //////////////////////////////////////////////////////////////////////
 void statement(symset fsys)
 {
-	int i, cx1, cx2;
+	int i, cx1, cx2,cx3;
 	symset set1, set;
 
 	if (sym == SYM_IDENTIFIER)
@@ -1014,6 +1014,59 @@ void statement(symset fsys)
 		}
 		destroyset(set1);
 		destroyset(set);
+	}
+		else if (sym == SYM_FOR) 
+	{
+		getsym();
+		gen(INT, 0, 100);
+		if (sym == SYM_LPAREN)
+			getsym();
+		else
+			error(33);
+		if (sym == SYM_IDENTIFIER) {
+			set1 = createset(SYM_SEMICOLON, SYM_NULL);
+			set = uniteset(set1, fsys);
+			assign_expr(set);//?
+			destroyset(set);
+			destroyset(set1);
+			if (sym == SYM_SEMICOLON)
+				getsym();
+			else
+				error(17);
+		}
+		else
+			error(11);
+		//to here assign finished
+		cx1 = cx;
+		set1 = createset(SYM_SEMICOLON,SYM_NULL);
+		set = uniteset(set1, fsys);
+		or_express(set);
+		destroyset(set1);
+		destroyset(set);
+		if (sym == SYM_SEMICOLON)
+			getsym();
+		else
+			error(17);
+		gen(JPC, 0, 0);
+		gen(JMP, 0, 0);
+		cx2 = cx;
+
+		set1 = createset(SYM_RPAREN, SYM_NULL);
+		set = uniteset(set1, fsys);
+		assign_expr(set);
+		destroyset(set1);
+		destroyset(set);
+		cx3 = cx;
+		gen(JMP, 0, cx1);
+		code[cx2 - 1].a = cx;//JMP
+
+		if (sym == SYM_RPAREN)
+			getsym();
+		else
+			error(22);
+		statement(fsys);
+		gen(JMP, 0, cx2);
+		code[cx2 - 2].a = cx;
 	}
 	else if (sym == SYM_BEGIN)
 	{ // block

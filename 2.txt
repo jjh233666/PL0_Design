@@ -10,4 +10,7 @@ begin
 i=1;
 j=p(i);
 i=i+j;
+for(j=0;j<5;j=j+1)begin
+i=j;
+end
 end.
