@@ -2,13 +2,13 @@ var i,j;
 procedure p(var m){
 var k;
 begin
-m=1;
-return m*2; 
+if(m>1) then return m*p(m-1); 
+else return 1;
 end	
 }
 begin
-i=1;
-j=p(i);
+i=5;
+j=p(5);
 i=i+j;
 print(2,i,j);
 /*for(j=0;j<5;j=j+1)begin
