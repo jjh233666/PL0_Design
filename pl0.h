@@ -1,6 +1,6 @@
 #include <stdio.h>
 
-#define NRW        16     // number of reserved words
+#define NRW        18     // number of reserved words
 #define TXMAX      500    // length of identifier table
 #define MAXNUMLEN  14     // maximum number of digits in numbers
 #define NSYM       17     // maximum number of symbols in array ssym and csym
@@ -8,7 +8,7 @@
 
 #define MAXADDRESS 32767  // maximum address
 #define MAXLEVEL   32     // maximum depth of nesting block
-#define CXMAX      500    // size of code array
+#define CXMAX      5000    // size of code array
 
 #define MAXSYM     30     // maximum number of symbols  
 #define MAXDIM     10     // maximum dimension of the array
@@ -77,8 +77,9 @@ enum symtype
 	SYM_DIVEQ,
 	SYM_MODEQ,
 	SYM_LBrace,   //{
-	SYM_RBrace    //}
-	
+	SYM_RBrace,    //}
+	SYM_RANDOM,
+	SYM_PRINT
 };
 
 enum idtype
@@ -88,7 +89,7 @@ enum idtype
 
 enum opcode
 {
-	LIT, OPR, LOD, STO, CAL, INT, JMP, JPC,ARR_STO,ARR_LOD,RETURN
+	LIT, OPR, LOD, STO, CAL, INT, JMP, JPC,ARR_STO,ARR_LOD,RETURN,RANDOM,PRINT
 };
 
 enum oprcode
@@ -173,34 +174,33 @@ char* word[NRW + 1] =
 	"", /* place holder */
 	"begin", "call", "const", "do", "end","if",
 	"odd", "procedure", "then", "var", "while",
-	"else","elif","return","exit","for"
+	"else","elif","return","exit","for","random","print"
 };
 
 int wsym[NRW + 1] =
 {
 	SYM_NULL, SYM_BEGIN, SYM_CALL, SYM_CONST, SYM_DO, SYM_END,
 	SYM_IF, SYM_ODD, SYM_PROCEDURE, SYM_THEN, SYM_VAR, SYM_WHILE,
-	SYM_ELSE,SYM_ELIF,SYM_RETURN,SYM_EXIT,SYM_FOR
+	SYM_ELSE,SYM_ELIF,SYM_RETURN,SYM_EXIT,SYM_FOR,SYM_RANDOM,SYM_PRINT
 };
-
+#define MAXINS   13
+char* mnemonic[MAXINS] =
+{
+	"LIT", "OPR", "LOD", "STO", "CAL", "INT", "JMP", "JPC","ARR_STO","ARR_LOD","RETURN","RANDOM","PRINT"
+};
 int ssym[NSYM + 1] =
 {
 	SYM_NULL, SYM_LBRACKET, SYM_RBRACKET, SYM_TIMES, SYM_SLASH,
 	SYM_LPAREN, SYM_RPAREN, SYM_EQU, SYM_COMMA, SYM_PERIOD, SYM_SEMICOLON,SYM_NOT,
 	SYM_BAND ,SYM_BOR,SYM_BNOR,SYM_MOD,SYM_LBrace,SYM_RBrace
 };
-
 char csym[NSYM + 1] =
 {
 	' ', '[', ']', '*', '/', '(', ')', '=', ',', '.', ';', '!','&','|','^','%','{','}'
 	
 };
 
-#define MAXINS   11
-char* mnemonic[MAXINS] =
-{
-	"LIT", "OPR", "LOD", "STO", "CAL", "INT", "JMP", "JPC","ARR_STO","ARR_LOD","RETURN"
-};
+
 
 typedef struct
 {

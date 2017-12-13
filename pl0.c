@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <time.h>
 
 #include "pl0.h"
 #include "set.c"
@@ -464,7 +465,7 @@ void arglist_declar(symset fsys)
 	for(index=count;index>0;index--)
 	{
 		mk=(mask*) &table[proc_tx+index];
-		mk->address=mk->address-dx;
+		mk->address=mk->address-dx; // the address is under the p_id
 	}
 	dx=0;
 }
@@ -502,6 +503,28 @@ int real_arg_list(symset fsys)
 	}// end if
 	return arg_num;
 }//end real_arg_expr
+void PRINT_CALL(symset fsys)
+{
+	int count;
+	getsym();
+	symset set;
+	set=uniteset(fsys,createset(SYM_LPAREN,SYM_RPAREN,SYM_NULL));
+	count=real_arg_list(set);
+	destroyset(set);
+	gen(LIT,0,count);
+	gen(PRINT,0,0);
+}
+void random_call(symset fsys)
+{
+     int count;
+	 getsym();
+	 symset set;
+	 set=uniteset(fsys,createset(SYM_LPAREN,SYM_RPAREN,SYM_NULL));
+	 count=real_arg_list(set);
+	 destroyset(set);
+	 if(count==0){gen(LIT,0,0);}
+	 gen(RANDOM,0,0);
+}
 void pro_call(symset fsys,int i)
 {
      symset set;
@@ -659,6 +682,10 @@ void factor(symset fsys)
 			getsym();
 			factor(fsys);
 			gen(OPR,0,OPR_NOT);
+		}
+		else if(sym==SYM_RANDOM)
+		{
+			random_call(fsys);
 		}
 		/*else if(sym == SYM_ODD)
 		{
@@ -965,6 +992,10 @@ void statement(symset fsys)
 		gen(RETURN,0,0);
 		if(sym==SYM_SEMICOLON) getsym();
 		else error(10);
+	}
+	else if(sym==SYM_PRINT)
+	{
+			PRINT_CALL(fsys);
 	}
 	else if (sym == SYM_EXIT)
 	{
@@ -1283,7 +1314,7 @@ void block(symset fsys)
 	}
 	else return_address=-1;
 	gen(STO,0,return_address);
-    gen(RETURN,0,0);
+    gen(RETURN,0,0);    //pop 
 	test(fsys, phi, 8); // test for error: Follow the statement is an incorrect symbol.
 	listcode(cx0, cx);
 } // block
@@ -1301,7 +1332,8 @@ int base(int stack[], int currentLevel, int levelDiff)
 //////////////////////////////////////////////////////////////////////
 // interprets and executes codes.
 void interpret()
-{
+{ 
+	int j;
 	int pc;        // program counter
 	int stack[STACKSIZE];
 	int top;       // top of stack
@@ -1401,10 +1433,10 @@ void interpret()
 		case INT:
 			top += i.a;
 			break;
-		case JMP:	//条件跳转
+		case JMP:	//
 			pc = i.a;
 			break;
-		case JPC:	//无条件跳转
+		case JPC:	//
 			if (stack[top] == 0)
 				pc = i.a;
 			top--;
@@ -1426,6 +1458,25 @@ void interpret()
 			pc=stack[b+2];
 			b =stack[b+1];
 			break;
+		case RANDOM:
+		if(stack[top]==0)
+		{ 
+          stack[top]=rand();
+		}
+        else 
+		    {
+				
+				stack[top]=rand()%stack[top];
+			}
+			//printf("%lf",&stack[top-1]);
+		break;
+		case PRINT:
+		offset=stack[top];
+		for(j=1;j<offset;j++)
+		{
+           printf("%d  ",stack[--top]);
+		}
+		break;
 		} // switch
 	}
 	while (pc);
@@ -1439,8 +1490,8 @@ void main ()
 	FILE* hbin;
 	char s[80];
 	int i;
+	srand(time(NULL));
 	symset set, set1, set2;
-
 	printf("Please input source file name: "); // get file name to be compiled
 	scanf("%s", s);
 	if ((infile = fopen(s,"r"))==NULL)
@@ -1455,7 +1506,7 @@ void main ()
 	// create begin symbol sets
 	declbegsys = createset(SYM_CONST, SYM_VAR, SYM_PROCEDURE, SYM_NULL);
 	statbegsys = createset(SYM_BEGIN, SYM_CALL, SYM_IF, SYM_WHILE,SYM_RETURN,SYM_NULL);
-	facbegsys = createset(SYM_IDENTIFIER, SYM_NUMBER, SYM_LPAREN, SYM_MINUS,SYM_NOT,SYM_NULL);
+	facbegsys = createset(SYM_IDENTIFIER, SYM_NUMBER, SYM_LPAREN, SYM_MINUS,SYM_NOT,SYM_RANDOM,SYM_PRINT,SYM_NULL);
 
 	err = cc = cx = ll = 0; // initialize global variables
 	ch = ' ';
