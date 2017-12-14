@@ -435,6 +435,7 @@ int arg_get_type(void)     //get the variables' type
 		getsym();
 		vardeclaration();
 	}
+    
 	else 
 	{
         error(33);
@@ -1376,7 +1377,7 @@ void interpret()
 			case OPR_MUL:
 				top--;
 				stack[top] *= stack[top + 1];
-				printf("%d\n",stack[top]);
+				//printf("%d\n",stack[top]);
 				break;
 			case OPR_DIV:	
 				top--;
@@ -1419,7 +1420,7 @@ void interpret()
 			break;
 		case STO:
 			stack[base(stack, b, i.l) + i.a] = stack[top];
-			printf("%d\n", stack[top]);
+			//printf("%d\n", stack[top]);
 			//top--;
 			break;
 		case CAL:
@@ -1450,7 +1451,7 @@ void interpret()
             stack[base(stack,b,i.l)+offset+i.a]=stack[top];
 			stack[top-1]=stack[top];// pop the stack top
 			top-=1;
-			printf("%d\n",stack[top]);
+			//printf("%d\n",stack[top]);
 		    break;
 		case RETURN:
 			//printf("%d\n",stack[top]);
@@ -1472,10 +1473,11 @@ void interpret()
 		break;
 		case PRINT:
 		offset=stack[top];
-		for(j=1;j<offset;j++)
+		for(j=0;j<offset;j++)
 		{
-           printf("%d  ",stack[--top]);
+           printf("%d  ",stack[top-offset+j]);
 		}
+		printf("\n");
 		break;
 		} // switch
 	}

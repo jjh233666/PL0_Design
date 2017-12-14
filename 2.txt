@@ -1,4 +1,4 @@
-var i,j;
+var i,j,a[5][5];
 procedure p(var m){
 var k;
 begin
@@ -11,7 +11,10 @@ i=5;
 j=p(5);
 i=i+j;
 print(2,i,j);
-/*for(j=0;j<5;j=j+1)begin
-i=j;
-end*/
+for(j=0;j<5;j=j+1)begin
+for(i=0;i<5;i=i+1)begin
+a[i][j]=i+j;
+print(a[i][j]);
+end
+end
 end.
