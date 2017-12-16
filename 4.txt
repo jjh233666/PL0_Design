@@ -1,0 +1,38 @@
+var i,j;
+/*procedure p(var m){
+var k;
+begin
+if(m>1) then return m*p(m-1); 
+else return 1;
+end	
+}*/
+procedure swap(var &a,var &b){
+var c;
+begin
+c=a;
+print(c);
+a=b;
+//print(a);
+b=c;
+//print(b);
+end
+}
+begin
+i=2;
+j=5;
+swap(i,j);
+print(i,j);
+
+
+
+/*i=5;
+j=p(5);
+i=i+j;
+print(2,i,j);
+for(j=0;j<5;j=j+1)begin
+for(i=0;i<5;i=i+1)begin
+a[i][j]=i+j;
+print(a[i][j]);
+end
+end*/
+end.
