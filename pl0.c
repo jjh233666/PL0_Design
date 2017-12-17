@@ -78,6 +78,14 @@ void getsym(void)
 		while (strcmp(id, word[i--]));
 		if (++i)
 			sym = wsym[i]; // symbol is a reserved word
+		else if(ch == ':'){	//判断是否为标签
+			getch();
+			char* temp = (char*)malloc((MAXIDLEN+1) * sizeof(char));
+			strcpy(temp, id);
+			labelNameList[labelIndex] = temp;	//存标签名称
+			labelAddressList[labelIndex] = cx;	//存标签下一个指令的地址
+			labelIndex++;	//可用索引位置指向下一个可用位置
+		}
 		else
 			sym = SYM_IDENTIFIER;   // symbol is an identifier
 	}
@@ -262,7 +270,33 @@ void getsym(void)
 		}
 	}
 } // getsym
-
+/////////////////////////////////////////////////////////////////////
+int locateLabel(char* name) {
+	int total = labelIndex;
+	int position = -1;
+	while (strcmp(name, labelNameList[++position])&&position<labelIndex);	//若标签不同则继续往后查找
+	if (position < labelIndex) {
+		return labelAddressList[position];
+	}
+	else return -1;
+}
+/////////////////////////////////////////////////////////////////////
+//回填goto列表
+void gotoListBackFill() {
+	while (gotoBackFillNum) {
+		int jumpAddress = locateLabel(gotoBackFillNameList[gotoBackFillNum-1]);
+		int backFillAddress = gotoBackFillAdressList[gotoBackFillNum - 1];
+		code[backFillAddress].a = jumpAddress;
+		free(gotoBackFillNameList[gotoBackFillNum - 1]);
+		gotoBackFillNum--;
+	}
+}
+///////////////////////////////////////////////////////////////////
+void clearLabel(void) {
+	while (labelIndex) {
+		free(labelNameList[--labelIndex]);
+	}
+}
 //////////////////////////////////////////////////////////////////////
 // generates (assembles) an instruction.
 void gen(int x, int y, int z)  //生成code中的
@@ -332,7 +366,11 @@ void enter(int kind)
 		mk->index=ax;
 		mk->address=dx;
 		break;
-	    
+	case ID_ADDRESS:
+	    mk=(mask*) &table[tx];
+		mk->level=level;
+		mk->address=dx++;
+		break;    
 	} // switch
 } // enter
 
@@ -380,7 +418,16 @@ void constdeclaration()
 void vardeclaration(void)
 {   int dim;
     int i;
-	if (sym == SYM_IDENTIFIER)
+	if (sym==SYM_BAND)
+	{
+		getsym();
+		if (sym == SYM_IDENTIFIER)
+		{
+			getsym();
+			enter(ID_ADDRESS);
+		}
+	}
+	else if (sym == SYM_IDENTIFIER)
 	{
 		getsym();
 		if(sym!=SYM_LBRACKET)
@@ -470,24 +517,45 @@ void arglist_declar(symset fsys)
 	}
 	dx=0;
 }
-int real_arg_list(symset fsys)
+int real_arg_list(symset fsys,int i)
 {
 	void assign_expr(symset fsys);
 	int arg_num=0;
 	symset set;
+	mask* mk=(mask*)&table[i];
 	if(sym==SYM_LPAREN)
 	{   
 		getsym();
 		if(sym!=SYM_RPAREN)
 		{
             set=uniteset(fsys,createset(SYM_COMMA,SYM_LPAREN,SYM_RPAREN,SYM_NULL));
-		    assign_expr(set);
+		    if((i!=-1)&&Protable[mk->index].type[arg_num]==ID_ADDRESS)
+			{   if(sym==SYM_IDENTIFIER)
+			    {
+					i=position(id);
+					mask* mk=(mask*)&table[i];
+				    gen(LEA,level-mk->level,mk->address);
+					getsym();
+			    }
+			}
+			else assign_expr(set);
 			arg_num++;
 			while(sym==SYM_COMMA)
 			{
-				getsym();
-				set=uniteset(fsys,createset(SYM_COMMA,SYM_RPAREN,SYM_NULL));
-		        assign_expr(set);
+				if((i!=-1)&&Protable[mk->index].type[arg_num]==ID_ADDRESS)
+			    {
+					getsym();
+					i=position(id);
+					mask* mk=(mask*)&table[i];
+				    gen(LEA,level-mk->level,mk->address);
+					getsym();
+			    }
+		        else 
+				{
+				    getsym();
+				    set=uniteset(fsys,createset(SYM_COMMA,SYM_RPAREN,SYM_NULL));
+				    assign_expr(set);		
+			    }
 			    arg_num++;
 			}//end while
 			destroyset(set);
@@ -510,7 +578,7 @@ void PRINT_CALL(symset fsys)
 	getsym();
 	symset set;
 	set=uniteset(fsys,createset(SYM_LPAREN,SYM_RPAREN,SYM_NULL));
-	count=real_arg_list(set);
+	count=real_arg_list(set,-1);
 	destroyset(set);
 	gen(LIT,0,count);
 	gen(PRINT,0,0);
@@ -521,7 +589,7 @@ void random_call(symset fsys)
 	 getsym();
 	 symset set;
 	 set=uniteset(fsys,createset(SYM_LPAREN,SYM_RPAREN,SYM_NULL));
-	 count=real_arg_list(set);
+	 count=real_arg_list(set,-1);
 	 destroyset(set);
 	 if(count==0){gen(LIT,0,0);}
 	 gen(RANDOM,0,0);
@@ -534,7 +602,7 @@ void pro_call(symset fsys,int i)
 	 gen(INT,0,1);
 	 getsym();
 	 set=uniteset(fsys,createset(SYM_LPAREN,SYM_RPAREN,SYM_NULL));
-	 count=real_arg_list(set);
+	 count=real_arg_list(set,i);
 	 destroyset(set);
 	 gen(CAL,level-mk->level,mk->address);
 	 gen(INT,0,-count);
@@ -640,6 +708,12 @@ void factor(symset fsys)
 					arr_address_compute(fsys,i);// compute the adddress of our array and put it into the stack[top]
 					gen(ARR_LOD,level-mk->level,mk->address);
 					break;
+				case ID_ADDRESS:
+				    mk = (mask*) &table[i];
+					getsym();
+					gen(LOD,level-mk->level,mk->address);
+					gen(LOD_A,0,0);
+					break;
 				case ID_PROCEDURE:
 				    pro_call(fsys,i);
 					break;
@@ -659,12 +733,16 @@ void factor(symset fsys)
 		}
 		else if (sym == SYM_LPAREN)
 		{
+			counter++;
 			getsym();
 			set = uniteset(createset(SYM_RPAREN, SYM_NULL), fsys);
 			assign_expr(set);
+			if(cmax<counter)
+			cmax=counter;
 			destroyset(set);
 			if (sym == SYM_RPAREN)
 			{
+				counter--;
 				getsym();
 			}
 			else
@@ -783,22 +861,22 @@ void rel_expr(symset fsys)//condition 10_25
 			switch (relop)
 			{
 			case SYM_EQU:
-				gen(OPR, 0, OPR_EQU);
+				gen(JE, 0, 0);
 				break;
 			case SYM_NEQ:
-				gen(OPR, 0, OPR_NEQ);
+				gen(JNE, 0, 0);
 				break;
 			case SYM_LES:
-				gen(OPR, 0, OPR_LES);
+				gen(JL, 0, 0);
 				break;
 			case SYM_GEQ:
-				gen(OPR, 0, OPR_GEQ);
+				gen(JGE, 0, 0);
 				break;
 			case SYM_GTR:
-				gen(OPR, 0, OPR_GTR);
+				gen(JG, 0, 0);
 				break;
 			case SYM_LEQ:
-				gen(OPR, 0, OPR_LEQ);
+				gen(JLE, 0, 0);
 				break;
 			} // switch
 		} // else
@@ -849,11 +927,49 @@ void and_express(symset fsys)
 	symset set;
 	set =uniteset(fsys,createset(SYM_AND,SYM_NULL));
 	BOR_express(set);
-	while(sym==SYM_AND){
-		getsym();
-		BOR_express(set);
-		gen(OPR,0,OPR_AND);
-	}//while
+	if (sym == SYM_AND) {
+		while (sym == SYM_AND) {
+			getsym();
+			switch(code[cx-1].f){
+				case JE:
+					code[cx-1].f=JNE;
+					falselist[counter][fsize[counter]++] = cx-1;
+					break;
+				case JNE:
+					code[cx-1].f=JE;
+					falselist[counter][fsize[counter]++] = cx-1;
+					break;
+				case JL:
+					code[cx-1].f=JGE;
+					falselist[counter][fsize[counter]++] = cx-1;
+					break;
+				case JLE:
+					code[cx-1].f=JG;
+					falselist[counter][fsize[counter]++] = cx-1;
+					break;
+				case JG:
+					code[cx-1].f=JLE;
+					falselist[counter][fsize[counter]++] = cx-1;
+					break;
+				case JGE:
+					code[cx-1].f=JL;
+					falselist[counter][fsize[counter]++] = cx-1;
+					break;
+				default:
+					falselist[counter][fsize[counter]++] = cx;
+					gen(JZ, 0, 0);
+					break;
+			}
+			int i;
+			for(i=cmax;i>counter;i--){
+				while (tsize[i]){
+					--tsize[i];
+					code[truelist[i][tsize[i]]].a = cx ;
+				}
+			}
+			BOR_express(set);
+		}//while
+	}
 	destroyset(set);
 }
 
@@ -862,11 +978,44 @@ void or_express(symset fsys)
 	symset set;
 	set =uniteset(fsys,createset(SYM_OR,SYM_NULL));
     and_express(set);
-	while(sym==SYM_OR)
-	{
-        getsym();
-		and_express(set);
-		gen(OPR,0,OPR_OR);
+	if (sym == SYM_OR) {
+		while (sym == SYM_OR)
+		{
+			switch(code[cx-1].f){
+				case JE:
+					truelist[counter][tsize[counter]++] = cx-1;
+					break;
+				case JNE:
+					truelist[counter][tsize[counter]++] = cx-1;
+					break;
+				case JL:
+					truelist[counter][tsize[counter]++] = cx-1;
+					break;
+				case JLE:
+					truelist[counter][tsize[counter]++] = cx-1;
+					break;
+				case JG:
+					truelist[counter][tsize[counter]++] = cx-1;
+					break;
+				case JGE:
+					truelist[counter][tsize[counter]++] = cx-1;
+					break;
+				default:
+					truelist[counter][tsize[counter]++] = cx;
+					gen(JNZ, 0, 0);
+					break;
+			}
+			int i;
+			for(i=cmax;i>=counter;i--){
+				while (fsize[i]){
+					--fsize[i];
+					code[falselist[i][fsize[i]]].a = cx ;
+				}
+			}
+			getsym();
+			and_express(set);
+			//gen(OPR,0,OPR_OR);
+		}
 	}
 	destroyset(set);
 }
@@ -887,14 +1036,19 @@ void assign_expr(symset fsys)
 			test(statbegsys,set,24);
 			destroyset(set);
 		}
-		else if(table[i].kind==ID_ARRAY||table[i].kind==ID_VARIABLE)
+		else if(table[i].kind==ID_ARRAY||table[i].kind==ID_VARIABLE||table[i].kind==ID_ADDRESS)
 		{
 			getsym();
+			mk=(mask*) &table[i];
 			if(table[i].kind==ID_ARRAY)
 			{
 			    arr_address_compute(fsys,i);
 			}
-			mk=(mask*) &table[i];
+			if(table[i].kind==ID_ADDRESS)
+			{
+                gen(LOD,level-mk->level,mk->address);
+				//getsym();
+			}
 			if(sym==SYM_BECOMES)
 			{
 				getsym();
@@ -904,16 +1058,26 @@ void assign_expr(symset fsys)
 				if(i)
 				{
 					if(table[i].kind==ID_VARIABLE) gen(STO,level-mk->level,mk->address);   //if the text you read is id  (ass->id=ass|id|or_express)
-					else gen(ARR_STO,level-mk->level,mk->address);  //if it is an item of array use the ARR_STO
-				
+					else if(table[i].kind==ID_ARRAY) gen(ARR_STO,level-mk->level,mk->address);  //if it is an item of array use the ARR_STO
+				    else if(table[i].kind==ID_ADDRESS){gen(STO_A,level-mk->level,mk->address); }
 				}
 			}
 			else 
 			{
 				if(i)
 				{
-					if(table[i].kind==ID_VARIABLE) gen(LOD,level-mk->level,mk->address);
-					else gen(ARR_LOD,level-mk->level,mk->address);
+					if(table[i].kind==ID_VARIABLE)
+					{ 
+						gen(LOD,level-mk->level,mk->address);
+					}
+					if(table[i].kind==ID_ARRAY) 
+					{
+						gen(ARR_LOD,level-mk->level,mk->address);
+					}
+				    if(table[i].kind==ID_ADDRESS)
+					{
+						gen(LOD_A,0,0);
+					}
 				}// end if
 				id_redundancy=1;
 				or_express(fsys);
@@ -1011,6 +1175,16 @@ void statement(symset fsys)
 			error(10); //';'expected
 		}*/
 	}
+	else if (sym == SYM_GOTO)
+	{
+		gotoBackFillAdressList[gotoBackFillNum] = cx;
+		gen(JMP, 0, 0);		//待回填
+		getsym();
+		char* name = (char*)malloc((MAXIDLEN + 1) * sizeof(char));
+		strcpy(name, id);
+		gotoBackFillNameList[gotoBackFillNum++] = name;
+		getsym();
+	}
 	else if (sym == SYM_IF)
 	{ // if statement
 		getsym();
@@ -1027,22 +1201,108 @@ void statement(symset fsys)
 		{
 			error(16); // 'then' expected.
 		}
-		
-		cx1 = cx;	//保存当前指令位置
-		gen(JPC, 0, 0);	//生成条件跳转指令，跳转地址暂写0
+		switch(code[cx-1].f){
+			case JE:
+				code[cx-1].f=JNE;
+				falselist[counter][fsize[counter]++] = cx-1;
+				break;
+			case JNE:
+				code[cx-1].f=JE;
+				falselist[counter][fsize[counter]++] = cx-1;
+				break;
+			case JL:
+				code[cx-1].f=JGE;
+				falselist[counter][fsize[counter]++] = cx-1;
+				break;
+			case JLE:
+				code[cx-1].f=JG;
+				falselist[counter][fsize[counter]++] = cx-1;
+				break;
+			case JG:
+				code[cx-1].f=JLE;
+				falselist[counter][fsize[counter]++] = cx-1;
+				break;
+			case JGE:
+				code[cx-1].f=JL;
+				falselist[counter][fsize[counter]++] = cx-1;
+				break;
+			default:
+				falselist[counter][fsize[counter]++] = cx;
+				gen(JZ, 0, 0);
+				break;
+		}
+		int i;
+		for(i=cmax;i>=counter;i--){
+			while (tsize[i]){
+				--tsize[i];
+				code[truelist[i][tsize[i]]].a = cx ;
+			}
+		}
 		//set1 = createset(SYM_ELSE,SYM_NULL);
 		//set = uniteset(set1,fsys);
 		statement(set);	//处理then后语句
+		truelist[counter][tsize[counter]++] = cx;
+		gen(JNZ, 0, 0);	//if为真时then语句执行完跳转，跳转地址暂写0
 		if(sym == SYM_ELSE){
 			getsym();
-			cx2 = cx;
-			code[cx1].a = cx+1;
-			gen(JPC,0,0); 
-			statement(fsys);
-			code[cx2].a = cx;
+			gen(JZ,0,0);
+			for(i=cmax;i>=counter;i--){
+				while (fsize[i]){
+					--fsize[i];
+					code[falselist[i][fsize[i]]].a = cx ;
+				}
+			}
+			statement(set);
+			switch(code[cx-1].f){
+				case JE:
+					code[cx-1].f=JNE;
+					falselist[counter][fsize[counter]++] = cx-1;
+					break;
+				case JNE:
+					code[cx-1].f=JE;
+					falselist[counter][fsize[counter]++] = cx-1;
+					break;
+				case JL:
+					code[cx-1].f=JGE;
+					falselist[counter][fsize[counter]++] = cx-1;
+					break;
+				case JLE:
+					code[cx-1].f=JG;
+					falselist[counter][fsize[counter]++] = cx-1;
+					break;
+				case JG:
+					code[cx-1].f=JLE;
+					falselist[counter][fsize[counter]++] = cx-1;
+					break;
+				case JGE:
+					code[cx-1].f=JL;
+					falselist[counter][fsize[counter]++] = cx-1;
+					break;
+				default:
+					falselist[counter][fsize[counter]++] = cx;
+					gen(JZ, 0, 0);
+					break;
+			}
+			for(i=cmax;i>=counter;i--){
+				while (tsize[i]){
+					--tsize[i];
+					code[truelist[i][tsize[i]]].a = cx ;
+				}
+			}
 		}
 		else{
-			code[cx1].a = cx;
+			for(i=cmax;i>=counter;i--){
+				while (fsize[i]){
+					--fsize[i];
+					code[falselist[i][fsize[i]]].a = cx ;
+				}
+			}
+			for(i=cmax;i>=counter;i--){
+				while (tsize[i]){
+					--tsize[i];
+					code[truelist[i][tsize[i]]].a = cx ;
+				}
+			}
 		}
 		destroyset(set1);
 		destroyset(set);
@@ -1079,7 +1339,7 @@ void statement(symset fsys)
 			getsym();
 		else
 			error(17);
-		gen(JPC, 0, 0);
+		gen(JZ, 0, 0);
 		gen(JMP, 0, 0);
 		cx2 = cx;
 
@@ -1139,7 +1399,7 @@ void statement(symset fsys)
 		destroyset(set1);
 		destroyset(set);
 		cx2 = cx;
-		gen(JPC, 0, 0);
+		gen(JZ, 0, 0);
 		if (sym == SYM_DO)
 		{
 			getsym();
@@ -1389,6 +1649,22 @@ void interpret()
 				}
 				stack[top] /= stack[top + 1];
 				break;
+			case OPR_MOD:
+				top--;
+				stack[top] %= stack[top+1];
+				break;
+			case OPR_BAND:
+				top--;
+				stack[top] &= stack[top + 1];
+				break;
+			case OPR_BNOR:
+				top--;
+				stack[top] = stack[top]^stack[top + 1];
+				break;
+			case OPR_BOR:
+				top--;
+				stack[top] |= stack[top + 1];
+				break;
 			case OPR_ODD:
 				stack[top] %= 2;
 				break;
@@ -1417,6 +1693,7 @@ void interpret()
 			break;
 		case LOD:
 			stack[++top] = stack[base(stack, b, i.l) + i.a];
+			//printf("%d\n",stack[top]);
 			break;
 		case STO:
 			stack[base(stack, b, i.l) + i.a] = stack[top];
@@ -1437,8 +1714,43 @@ void interpret()
 		case JMP:	//
 			pc = i.a;
 			break;
-		case JPC:	//
+		case JZ:	//
 			if (stack[top] == 0)
+				pc = i.a;
+			top--;
+			break;
+		case JNZ: //条件不为0跳转
+			if (stack[top] == 1)
+				pc = i.a;
+			top--;
+			break;
+		case JG:
+			if(stack[top-1]>stack[top])
+				pc = i.a;
+			top--;
+			break;
+		case JGE:
+			if(stack[top-1]>=stack[top])
+				pc = i.a;
+			top--;
+			break;
+		case JL:
+			if(stack[top-1]<stack[top])
+				pc = i.a;
+			top--;
+			break;
+		case JLE:
+			if(stack[top-1]<=stack[top])
+				pc = i.a;
+			top--;
+			break;
+		case JE:
+			if(stack[top-1]==stack[top])
+				pc = i.a;
+			top--;
+			break;
+		case JNE:
+			if(stack[top-1]!=stack[top])
 				pc = i.a;
 			top--;
 			break;
@@ -1466,7 +1778,6 @@ void interpret()
 		}
         else 
 		    {
-				
 				stack[top]=rand()%stack[top];
 			}
 			//printf("%lf",&stack[top-1]);
@@ -1478,6 +1789,20 @@ void interpret()
            printf("%d  ",stack[top-offset+j]);
 		}
 		printf("\n");
+		break;
+		case LEA:
+		top++;
+		stack[top] = base(stack, b, i.l) + i.a;
+		break;
+		case LOD_A:
+		stack[top]=stack[stack[top]];
+		//printf("%d\n",stack[top]);
+		break;
+		case STO_A:
+		//printf("%d  %d   %d\n",stack[top-1]  ,top,stack[top]);
+		stack[stack[top-1]]=stack[top];
+        stack[top-1]=stack[top];
+		top-=1;
 		break;
 		} // switch
 	}
@@ -1507,7 +1832,7 @@ void main ()
 	
 	// create begin symbol sets
 	declbegsys = createset(SYM_CONST, SYM_VAR, SYM_PROCEDURE, SYM_NULL);
-	statbegsys = createset(SYM_BEGIN, SYM_CALL, SYM_IF, SYM_WHILE,SYM_RETURN,SYM_NULL);
+	statbegsys = createset(SYM_BEGIN, SYM_CALL, SYM_IF, SYM_WHILE,SYM_RETURN,SYM_GOTO,SYM_NULL);
 	facbegsys = createset(SYM_IDENTIFIER, SYM_NUMBER, SYM_LPAREN, SYM_MINUS,SYM_NOT,SYM_RANDOM,SYM_PRINT,SYM_NULL);
 
 	err = cc = cx = ll = 0; // initialize global variables
@@ -1530,6 +1855,9 @@ void main ()
 	destroyset(statbegsys);
 	destroyset(facbegsys);
 
+	gotoListBackFill();
+	clearLabel();
+	
 	if (sym != SYM_PERIOD)
 		error(9); // '.' expected.
 	if (err == 0)

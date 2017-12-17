@@ -1,9 +1,9 @@
 #include <stdio.h>
 
-#define NRW        18     // number of reserved words
+#define NRW        21     // number of reserved words
 #define TXMAX      500    // length of identifier table
 #define MAXNUMLEN  14     // maximum number of digits in numbers
-#define NSYM       17     // maximum number of symbols in array ssym and csym
+#define NSYM       18     // maximum number of symbols in array ssym and csym
 #define MAXIDLEN   10     // length of identifiers
 
 #define MAXADDRESS 32767  // maximum address
@@ -66,6 +66,9 @@ enum symtype
     SYM_RETURN,   //return
 	SYM_ELSE,     //else
 	SYM_ELIF,     //elif
+	SYM_GOTO,	  //goto
+	SYM_BREAK,	  //break
+	SYM_CONTINUE, //continue
 	SYM_EXIT,
 	SYM_FOR ,     //for
 	SYM_OREQ,
@@ -79,17 +82,20 @@ enum symtype
 	SYM_LBrace,   //{
 	SYM_RBrace,    //}
 	SYM_RANDOM,
-	SYM_PRINT
+	SYM_PRINT,
+	SYM_SLL, //<<
+	SYM_SRL  //>>
 };
 
 enum idtype
 {
-	ID_CONSTANT, ID_VARIABLE, ID_PROCEDURE,ID_ARRAY
+	ID_CONSTANT, ID_VARIABLE, ID_PROCEDURE,ID_ARRAY,ID_ADDRESS
 };
 
 enum opcode
 {
-	LIT, OPR, LOD, STO, CAL, INT, JMP, JPC,ARR_STO,ARR_LOD,RETURN,RANDOM,PRINT
+	LIT, OPR, LOD, STO, CAL, INT, JMP, JZ,ARR_STO,ARR_LOD,RETURN,RANDOM,PRINT
+	,LEA,STO_A,LOD_A,JNZ,JG,JGE,JL,JLE,JE,JNE
 };
 
 enum oprcode
@@ -99,7 +105,7 @@ enum oprcode
 	OPR_NEQ, OPR_LES, OPR_LEQ, OPR_GTR,
 	OPR_GEQ, OPR_NOT, OPR_AND, OPR_OR,
 	OPR_BAND,OPR_BOR, OPR_BNOR,OPR_MOD, //10.25
-	
+	OPR_SLL,OPR_SRL,
 };
 
 
@@ -168,35 +174,50 @@ int  p_index=0;
 char line[80];
 int curr_proc=0;
 instruction code[CXMAX];
+int truelist[5][30] = { 0 };
+int falselist[5][30] = { 0 };
+int tsize[5]={0};
+int fsize[5]={0};
+int counter=0;
+int cmax=0;
+
+char* labelNameList[MAXADDRESS];	//store the label name
+int labelIndex=0;	//store the next useful index
+int labelAddressList[MAXADDRESS];	//store the label address
+char* gotoBackFillNameList[MAXADDRESS];	//store the goto name
+int gotoBackFillAdressList[MAXADDRESS];	//store the backfill code address
+int gotoBackFillNum = 0;
 
 char* word[NRW + 1] =
 {
 	"", /* place holder */
 	"begin", "call", "const", "do", "end","if",
 	"odd", "procedure", "then", "var", "while",
-	"else","elif","return","exit","for","random","print"
+	"else","elif","return","exit","for","random","print","goto","break","continue"
 };
 
 int wsym[NRW + 1] =
 {
 	SYM_NULL, SYM_BEGIN, SYM_CALL, SYM_CONST, SYM_DO, SYM_END,
 	SYM_IF, SYM_ODD, SYM_PROCEDURE, SYM_THEN, SYM_VAR, SYM_WHILE,
-	SYM_ELSE,SYM_ELIF,SYM_RETURN,SYM_EXIT,SYM_FOR,SYM_RANDOM,SYM_PRINT
+	SYM_ELSE,SYM_ELIF,SYM_RETURN,SYM_EXIT,SYM_FOR,SYM_RANDOM,SYM_PRINT,
+	SYM_GOTO,SYM_BREAK,SYM_CONTINUE
 };
-#define MAXINS   13
+#define MAXINS   23
 char* mnemonic[MAXINS] =
 {
-	"LIT", "OPR", "LOD", "STO", "CAL", "INT", "JMP", "JPC","ARR_STO","ARR_LOD","RETURN","RANDOM","PRINT"
+	"LIT", "OPR", "LOD", "STO", "CAL", "INT", "JMP", "JZ","ARR_STO","ARR_LOD","RETURN","RANDOM","PRINT"
+	,"LEA","STO_A","LOD_A","JNZ","JG","JGE","JL","JLE","JE","JNE"
 };
 int ssym[NSYM + 1] =
 {
 	SYM_NULL, SYM_LBRACKET, SYM_RBRACKET, SYM_TIMES, SYM_SLASH,
 	SYM_LPAREN, SYM_RPAREN, SYM_EQU, SYM_COMMA, SYM_PERIOD, SYM_SEMICOLON,SYM_NOT,
-	SYM_BAND ,SYM_BOR,SYM_BNOR,SYM_MOD,SYM_LBrace,SYM_RBrace
+	SYM_BAND ,SYM_BOR,SYM_BNOR,SYM_MOD,SYM_LBrace,SYM_RBrace,SYM_QUESMARK
 };
 char csym[NSYM + 1] =
 {
-	' ', '[', ']', '*', '/', '(', ')', '=', ',', '.', ';', '!','&','|','^','%','{','}'
+	' ', '[', ']', '*', '/', '(', ')', '=', ',', '.', ';', '!','&','|','^','%','{','}','?'
 	
 };
 
